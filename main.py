@@ -89,6 +89,38 @@ class GithubRepo:
             return pd.DataFrame(issue_data)
         return pd.DataFrame()
 
+    def get_pull_requets(self):
+        pr_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/pulls"
+        response = self.safe_request(pr_api_url)
+
+        if response:
+            pull_requests = response.json()
+            pr_data = []
+            for pr in pull_requests:
+                pr_data.append({
+                    "Title": pr['title'],
+                    "State": pr['state'],
+                    "Author": pr['user']['login']
+                })
+            return pd.DataFrame(pr_data)
+        return pd.DataFrame()
+
+    def get_contributors(self):
+        contributors_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/contributors"
+        response = self.safe_request(contributors_api_url)
+
+        if response:
+            contributors = response.json()
+            contributor_data = []
+            for contributor in contributors:
+                contributor_data.append({
+                    "Contributor": contributor['login'],
+                    "Contributions": contributor['contributions']
+                })
+            return pd.DataFrame(contributor_data)
+        return pd.DataFrame()
+
+
 if __name__ == "__main__":
     repo_url = input("Enter GitHub repository URL: ")
     access_token = input("Enter your GitHub personal access token: ")
