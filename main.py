@@ -94,7 +94,7 @@ class GithubRepo:
             return pd.DataFrame(issue_data)
         return pd.DataFrame()
 
-    def get_pull_requets(self):
+    def get_pull_requests(self):
         pr_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/pulls"
         response = self.safe_request(pr_api_url)
 
@@ -158,3 +158,31 @@ if repo_url and access_token:
             st.write("Please select exactly two commits to compare. ")
     else:
         st.write("No commits found. ")
+
+    st.header("Branches")
+    branches = github_repo.get_branches()
+    if branches:
+        st.write(branches)
+    else:
+        st.write("No branches found.")
+
+    st.header("Issues")
+    issues_df = github_repo.get_issues()
+    if not issues_df.empty:
+        st.dataframe(issues_df)
+    else:
+        st.write("No issues found.")
+
+    st.header("Pull Requests")
+    pr_df = github_repo.get_pull_requests()
+    if not pr_df.empty:
+        st.dataframe(pr_df)
+    else:
+        st.write("No pull requests found.")
+
+    st.header("Contributors")
+    contributors_df = github_repo.get_contributors()
+    if not contributors_df.empty:
+        st.dataframe(contributors_df)
+    else:
+        st.write("No contributors found.")
