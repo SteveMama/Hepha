@@ -1,6 +1,11 @@
-import pandas as pd
 import requests
 import json
+import streamlit as st
+from requests.exceptions import RequestException
+import pandas as pd
+from difflib import unified_diff
+
+import requests
 from requests.exceptions import RequestException
 
 class GithubRepo:
@@ -120,18 +125,36 @@ class GithubRepo:
             return pd.DataFrame(contributor_data)
         return pd.DataFrame()
 
+st.title(" Hepha AI: Code Reviewer")
+repo_url = st.text_input("Enter Github repo URL: ")
+access_token= st.text_input("Enter your Github personal access token", type="password")
 
-if __name__ == "__main__":
-    repo_url = input("Enter GitHub repository URL: ")
-    access_token = input("Enter your GitHub personal access token: ")
-
+if repo_url and access_token:
     github_repo = GithubRepo(repo_url, access_token)
+    st.header("Commit History")
+    commit_df = github_repo.get_commit_history()
+    if not commit_df.empty:
+        st.dataframe(commit_df)
+        st.write("Select commits to compare: ")
+        selected_commits = st.multiselect("Select Commits by SHA: ", commit_df["SHA"].tolist())
 
-    print("\nCommit History:")
-    github_repo.get_commit_history(repo_url, access_token)
+        if len(selected_commits) == 2:
+            st.write(f"compariing commits : {selected_commits[0]} and {selected_commits[1]}")
+            commit_diffs_1 = github_repo.get_commit_diff(selected_commits[0])
+            commit_diffs_2 = github_repo.get_commit_diff(selected_commits[1])
 
-    print("\nBranch Information:")
-    github_repo.get_branches(repo_url, access_token)
-
-    print("\nRepository Issues:")
-    github_repo.get_issues(repo_url, access_token)
+            for file1, file2 in zip(commit_diffs_1, commit_diffs_2):
+                if file1['filename'] == file2['filename']:
+                    st.write(f"### File: {file1['filename']}")
+                    diff = unified_diff(
+                        file1['patch'].splitlines(),
+                        file2['patch'].splitlines(),
+                        fromfile= f"{selected_commits[0]} - {file1['filename']}",
+                        tofile=f"{selected_commits[1]} - {file2['filename']}",
+                        lineterm=''
+                    )
+                    st.code('\n'.join(diff), language="diff")
+        else:
+            st.write("Please select exactly two commits to compare. ")
+    else:
+        st.write("No commits found. ")
