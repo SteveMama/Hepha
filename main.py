@@ -4,7 +4,7 @@ import streamlit as st
 from requests.exceptions import RequestException
 import pandas as pd
 from difflib import unified_diff
-import streamlit.components.v1 as components
+import base64
 
 
 class GitHubRepository:
@@ -48,21 +48,39 @@ class GitHubRepository:
             return pd.DataFrame(commit_data)
         return pd.DataFrame()
 
-    def get_commit_diff(self, commit_sha):
-        diff_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits/{commit_sha}"
-        response = self.safe_request(diff_api_url)
+    def get_latest_commit_per_file(self):
+        commits_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits?per_page=100"
+        response = self.safe_request(commits_api_url)
 
         if response:
-            commit = response.json()
-            if 'files' in commit:
-                diffs = []
-                for file in commit['files']:
-                    diffs.append({
-                        "filename": file['filename'],
-                        "patch": file.get('patch', 'No changes available')
-                    })
-                return diffs
-        return []
+            commits = response.json()
+            file_commits = {}
+            for commit in commits:
+                sha = commit['sha']
+                commit_details = self.safe_request(
+                    f"https://api.github.com/repos/{self.owner}/{self.repo}/commits/{sha}")
+                if commit_details:
+                    commit_files = commit_details.json().get('files', [])
+                    for file in commit_files:
+                        filename = file['filename']
+                        if filename not in file_commits:
+                            file_commits[filename] = {
+                                "sha": sha,
+                                "message": commit['commit']['message'],
+                                "patch": file.get('patch', 'No changes available')
+                            }
+            return file_commits
+        return {}
+
+    def get_file_content(self, file_path, commit_sha):
+        file_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/contents/{file_path}?ref={commit_sha}"
+        response = self.safe_request(file_api_url)
+
+        if response:
+            file_data = response.json()
+            if 'content' in file_data:
+                return file_data['content'], file_data['encoding']
+        return None, None
 
     def get_branches(self):
         branches_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/branches"
@@ -124,12 +142,10 @@ class GitHubRepository:
         return pd.DataFrame()
 
 
-# Streamlit UI with Tabs --"initial commit"
 st.title("GitHub Repository Explorer")
 repo_url = st.text_input("Enter GitHub repository URL:")
 access_token = st.text_input("Enter your GitHub personal access token:", type="password")
 
-# Initialize session state --"inital commit"
 if 'repo' not in st.session_state:
     st.session_state['repo'] = None
 
@@ -140,12 +156,31 @@ if repo_url and access_token:
 github_repo = st.session_state['repo']
 
 if github_repo:
-    tabs = st.tabs(["Repo Evaluation", "Commit History & Comparison", "Branches", "Issues", "Pull Requests", "Contributors"])
+    tabs = st.tabs(
+        ["Repo Evaluation", "Commit History & Comparison", "Branches", "Issues", "Pull Requests", "Contributors"])
 
     with tabs[0]:
         st.header("Repository Evaluation")
-        st.write("Evaluate the overall repository statistics here.")
-        # Additional repository evaluation features are to be added.
+        file_commits = github_repo.get_latest_commit_per_file()
+        if file_commits:
+            selected_file = st.selectbox("Select a file to view latest commit:", list(file_commits.keys()))
+            if selected_file:
+                commit_info = file_commits[selected_file]
+                st.write(f"**Latest Commit Message:** {commit_info['message']}")
+                st.write(f"**Commit SHA:** {commit_info['sha']}")
+                st.code(commit_info['patch'], language="diff")
+
+                # Show the current file content as well
+                file_content, encoding = github_repo.get_file_content(selected_file, commit_info['sha'])
+                if file_content:
+                    st.write("### File Content:")
+                    if encoding == 'base64':
+                        file_content_decoded = base64.b64decode(file_content).decode('utf-8')
+                        st.code(file_content_decoded, language="python")
+                else:
+                    st.write("Unable to fetch file content.")
+        else:
+            st.write("No commits found.")
 
     with tabs[1]:
         st.header("Commit History")
