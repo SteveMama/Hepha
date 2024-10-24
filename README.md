@@ -1,4 +1,4 @@
-# Hepha - The Giuthub Blacksmith
+# Hepha - The Github Blacksmith
 
 -------
 - Named after Hephaestus: Greek God of Tooling and Mettalurgy.
