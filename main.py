@@ -7,7 +7,9 @@ from difflib import unified_diff
 import base64
 import openai
 import os
+import streamlit.components.v1 as components
 
+openai.api_key = os.getenv("OPENAI_API_KEY")
 
 class GitHubRepository:
     def __init__(self, repo_url, access_token):
@@ -143,10 +145,19 @@ class GitHubRepository:
             return pd.DataFrame(contributor_data)
         return pd.DataFrame()
 
+    def get_commit_diff(self, commit_sha):
+        commit_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits/{commit_sha}"
+        response = self.safe_request(commit_api_url)
+
+        if response:
+            commit_data = response.json()
+            return commit_data.get('files', [])
+        return []
+
 
 def check_and_add_docstrings(file_content):
-    # Use OpenAI API to check and add docstrings
-    openai.api_key = os.getenv("OPENAI_API_KEY")
+
+
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
@@ -187,19 +198,26 @@ if github_repo:
                 st.write(f"**Commit SHA:** {commit_info['sha']}")
                 st.code(commit_info['patch'], language="diff")
 
-                # Show the current file content as well
+
                 file_content, encoding = github_repo.get_file_content(selected_file, commit_info['sha'])
                 if file_content:
                     st.write("### File Content:")
                     if encoding == 'base64':
                         file_content_decoded = base64.b64decode(file_content).decode('utf-8')
-                        st.code(file_content_decoded, language="python")
+
+
+                        col1, col2 = st.columns(2)
+
+                        with col1:
+                            st.write("**Original File Content**")
+                            st.code(file_content_decoded, language="python")
 
                         # Add button to check and add docstrings
                         if st.button("Check and Add Docstrings"):
                             updated_content = check_and_add_docstrings(file_content_decoded)
-                            st.write("### Updated File with Docstrings:")
-                            st.code(updated_content, language="python")
+                            with col2:
+                                st.write("**Updated File with Docstrings**")
+                                st.code(updated_content, language="python")
                 else:
                     st.write("Unable to fetch file content.")
         else:
