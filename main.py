@@ -142,7 +142,7 @@ class GitHubRepository:
         return pd.DataFrame()
 
 
-st.title("GitHub Repository Explorer")
+st.title("Hepha - The Github Blacksmith")
 repo_url = st.text_input("Enter GitHub repository URL:")
 access_token = st.text_input("Enter your GitHub personal access token:", type="password")
 
