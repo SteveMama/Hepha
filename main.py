@@ -4,11 +4,10 @@ import streamlit as st
 from requests.exceptions import RequestException
 import pandas as pd
 from difflib import unified_diff
+import streamlit.components.v1 as components
 
-import requests
-from requests.exceptions import RequestException
 
-class GithubRepo:
+class GitHubRepository:
     def __init__(self, repo_url, access_token):
         self.repo_url = repo_url.strip().rstrip("/")
         self.access_token = access_token
@@ -25,18 +24,18 @@ class GithubRepo:
 
     def safe_request(self, url):
         try:
-           response = requests.get(url, headers = self.headers)
-           response.raise_for_status()
-           return response
+            response = requests.get(url, headers=self.headers)
+            response.raise_for_status()
+            return response
         except RequestException as e:
-            print(f"Error occured: {e}")
+            st.error(f"Error occurred: {e}")
             return None
 
     def get_commit_history(self):
         commits_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/commits"
-        response = requests.get(commits_api_url, headers=self.headers)
+        response = self.safe_request(commits_api_url)
 
-        if response.status_code == 200:
+        if response:
             commits = response.json()
             commit_data = []
             for commit in commits:
@@ -56,25 +55,24 @@ class GithubRepo:
         if response:
             commit = response.json()
             if 'files' in commit:
-                diffs =[]
+                diffs = []
                 for file in commit['files']:
                     diffs.append({
                         "filename": file['filename'],
-                        "patch": file.get('patch', "No Changes Available")
+                        "patch": file.get('patch', 'No changes available')
                     })
-                    return diffs
+                return diffs
         return []
 
     def get_branches(self):
         branches_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/branches"
-        response = requests.get(branches_api_url, headers=self.headers)
+        response = self.safe_request(branches_api_url)
 
-        if response.status_code == 200:
+        if response:
             branches = response.json()
             branch_data = [branch['name'] for branch in branches]
             return branch_data
         return []
-
 
     def get_issues(self):
         issues_api_url = f"https://api.github.com/repos/{self.owner}/{self.repo}/issues"
@@ -125,39 +123,46 @@ class GithubRepo:
             return pd.DataFrame(contributor_data)
         return pd.DataFrame()
 
-st.title(" Hepha AI: Code Reviewer")
-repo_url = st.text_input("Enter Github repo URL: ")
-access_token= st.text_input("Enter your Github personal access token", type="password")
+
+# Streamlit UI
+st.title("GitHub Repository Explorer")
+repo_url = st.text_input("Enter GitHub repository URL:")
+access_token = st.text_input("Enter your GitHub personal access token:", type="password")
 
 if repo_url and access_token:
-    github_repo = GithubRepo(repo_url, access_token)
+    github_repo = GitHubRepository(repo_url, access_token)
+
     st.header("Commit History")
     commit_df = github_repo.get_commit_history()
     if not commit_df.empty:
         st.dataframe(commit_df)
-        st.write("Select commits to compare: ")
-        selected_commits = st.multiselect("Select Commits by SHA: ", commit_df["SHA"].tolist())
-
-        if len(selected_commits) == 2:
-            st.write(f"compariing commits : {selected_commits[0]} and {selected_commits[1]}")
+        st.write("Select commits to compare:")
+        selected_commit_messages = st.multiselect("Select commits by message:", commit_df["Message"].tolist())
+        if len(selected_commit_messages) == 2:
+            selected_commits = commit_df[commit_df["Message"].isin(selected_commit_messages)]["SHA"].values.tolist()
+            st.write(f"Comparing commits: {selected_commits[0]} and {selected_commits[1]}")
             commit_diffs_1 = github_repo.get_commit_diff(selected_commits[0])
             commit_diffs_2 = github_repo.get_commit_diff(selected_commits[1])
 
-            for file1, file2 in zip(commit_diffs_1, commit_diffs_2):
-                if file1['filename'] == file2['filename']:
-                    st.write(f"### File: {file1['filename']}")
+            files_to_compare = {file['filename']: file for file in commit_diffs_1}
+            for file in commit_diffs_2:
+                if file['filename'] in files_to_compare:
+                    st.write(f"### File: {file['filename']}")
+                    patch_1 = files_to_compare[file['filename']]['patch']
+                    patch_2 = file['patch']
                     diff = unified_diff(
-                        file1['patch'].splitlines(),
-                        file2['patch'].splitlines(),
-                        fromfile= f"{selected_commits[0]} - {file1['filename']}",
-                        tofile=f"{selected_commits[1]} - {file2['filename']}",
+                        patch_1.splitlines(),
+                        patch_2.splitlines(),
+                        fromfile=f"{selected_commits[0]} - {file['filename']}",
+                        tofile=f"{selected_commits[1]} - {file['filename']}",
                         lineterm=''
                     )
-                    st.code('\n'.join(diff), language="diff")
+                    diff_text = '\n'.join(diff)
+                    st.code(diff_text, language="diff")
         else:
-            st.write("Please select exactly two commits to compare. ")
+            st.write("Please select exactly two commits to compare.")
     else:
-        st.write("No commits found. ")
+        st.write("No commits found.")
 
     st.header("Branches")
     branches = github_repo.get_branches()
