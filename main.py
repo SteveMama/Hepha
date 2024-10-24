@@ -162,20 +162,26 @@ def check_code(file_content):
         messages=[
             {"role": "system", "content": "You are an expert code reviewer and security analyst."},
             {"role": "user",
-             "content": "Check if the following code contains docstrings. If not, generate appropriate docstrings and include them in the code. Also, identify any vulnerabilities in the code\n" + file_content}
+             "content": "Check the following code for missing docstrings, generate appropriate docstrings, and identify any vulnerabilities. "
+                        "Return the updated code with docstrings. For vulnerabilities, return them in the following format at the end of the code:\n"
+                        "\n# Vulnerabilities:\n"
+                        "- Description of vulnerability 1\n"
+                        "- Description of vulnerability 2\n\n" + file_content}
         ],
         temperature=0.2
     )
     return response['choices'][0]['message']['content']
 
 
+
 def extract_vulnerability_details(updated_content):
-    lines = updated_content.split('\n')
-    vulnerabilities = []
-    for line in lines:
-        if line.startswith("# Vulnerability:"):
-            vulnerabilities.append(line)
-    return vulnerabilities
+    if "# Vulnerabilities:" in updated_content:
+        vulnerabilities_section = updated_content.split("# Vulnerabilities:")[-1]
+        vulnerabilities = vulnerabilities_section.strip().split("\n")
+        vulnerabilities = [vuln.strip("- ") for vuln in vulnerabilities if vuln.strip()]
+        return vulnerabilities
+    return []
+
 
 
 st.title("Hepha - The Github Blacksmith")
