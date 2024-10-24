@@ -145,6 +145,8 @@ class GitHubRepository:
 
 
 def check_and_add_docstrings(file_content):
+    # Use OpenAI API to check and add docstrings
+    openai.api_key = os.getenv("OPENAI_API_KEY")
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
