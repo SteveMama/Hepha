@@ -11,6 +11,7 @@ import streamlit.components.v1 as components
 
 openai.api_key = os.getenv("OPENAI_API_KEY")
 
+
 class GitHubRepository:
     def __init__(self, repo_url, access_token):
         self.repo_url = repo_url.strip().rstrip("/")
@@ -155,19 +156,26 @@ class GitHubRepository:
         return []
 
 
-def check_and_add_docstrings(file_content):
-
-
+def check_code(file_content):
     response = openai.ChatCompletion.create(
         model="gpt-3.5-turbo",
         messages=[
-            {"role": "system", "content": "You are an expert code reviewer."},
+            {"role": "system", "content": "You are an expert code reviewer and security analyst."},
             {"role": "user",
-             "content": "Check if the following code contains docstrings. If not, generate appropriate docstrings and include them in the code:\n" + file_content}
+             "content": "Check if the following code contains docstrings. If not, generate appropriate docstrings and include them in the code. Also, identify any vulnerabilities in the code\n" + file_content}
         ],
         temperature=0.2
     )
     return response['choices'][0]['message']['content']
+
+
+def extract_vulnerability_details(updated_content):
+    lines = updated_content.split('\n')
+    vulnerabilities = []
+    for line in lines:
+        if line.startswith("# Vulnerability:"):
+            vulnerabilities.append(line)
+    return vulnerabilities
 
 
 st.title("Hepha - The Github Blacksmith")
@@ -198,13 +206,11 @@ if github_repo:
                 st.write(f"**Commit SHA:** {commit_info['sha']}")
                 st.code(commit_info['patch'], language="diff")
 
-
                 file_content, encoding = github_repo.get_file_content(selected_file, commit_info['sha'])
                 if file_content:
                     st.write("### File Content:")
                     if encoding == 'base64':
                         file_content_decoded = base64.b64decode(file_content).decode('utf-8')
-
 
                         col1, col2 = st.columns(2)
 
@@ -212,12 +218,19 @@ if github_repo:
                             st.write("**Original File Content**")
                             st.code(file_content_decoded, language="python")
 
-                        # Add button to check and add docstrings
-                        if st.button("Check and Add Docstrings"):
-                            updated_content = check_and_add_docstrings(file_content_decoded)
+                        if st.button("Diagnose Code"):
+                            updated_content = check_code(file_content_decoded)
                             with col2:
                                 st.write("**Updated File with Docstrings**")
                                 st.code(updated_content, language="python")
+
+                            vulnerabilities = extract_vulnerability_details(updated_content)
+                            if vulnerabilities:
+                                st.write("### Identified Vulnerabilities:")
+                                for vulnerability in vulnerabilities:
+                                    st.write(vulnerability)
+                            else:
+                                st.write("No vulnerabilities identified.")
                 else:
                     st.write("Unable to fetch file content.")
         else:
