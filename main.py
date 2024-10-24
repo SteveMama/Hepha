@@ -5,6 +5,8 @@ from requests.exceptions import RequestException
 import pandas as pd
 from difflib import unified_diff
 import base64
+import openai
+import os
 
 
 class GitHubRepository:
@@ -142,6 +144,19 @@ class GitHubRepository:
         return pd.DataFrame()
 
 
+def check_and_add_docstrings(file_content):
+    response = openai.ChatCompletion.create(
+        model="gpt-3.5-turbo",
+        messages=[
+            {"role": "system", "content": "You are an expert code reviewer."},
+            {"role": "user",
+             "content": "Check if the following code contains docstrings. If not, generate appropriate docstrings and include them in the code:\n" + file_content}
+        ],
+        temperature=0.2
+    )
+    return response['choices'][0]['message']['content']
+
+
 st.title("Hepha - The Github Blacksmith")
 repo_url = st.text_input("Enter GitHub repository URL:")
 access_token = st.text_input("Enter your GitHub personal access token:", type="password")
@@ -177,6 +192,12 @@ if github_repo:
                     if encoding == 'base64':
                         file_content_decoded = base64.b64decode(file_content).decode('utf-8')
                         st.code(file_content_decoded, language="python")
+
+                        # Add button to check and add docstrings
+                        if st.button("Check and Add Docstrings"):
+                            updated_content = check_and_add_docstrings(file_content_decoded)
+                            st.write("### Updated File with Docstrings:")
+                            st.code(updated_content, language="python")
                 else:
                     st.write("Unable to fetch file content.")
         else:
